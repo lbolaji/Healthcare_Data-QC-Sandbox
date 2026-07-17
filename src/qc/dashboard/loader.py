@@ -68,5 +68,9 @@ def load_delta_report(client: str, domain: str, run_date: str) -> dict:
     path = os.path.join(base, "qc_delta", f"client={client}", f"domain={domain}", f"date={run_date}", "delta_report.json")
     if not os.path.exists(path):
         return {}
-    with open(path) as f:
-        return json.load(f)
+    try:
+        with open(path) as f:
+            return json.load(f)
+    except (OSError, json.JSONDecodeError):
+        logger.warning("skipping unreadable delta report: %s", path)
+        return {}

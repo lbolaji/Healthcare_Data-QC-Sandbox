@@ -3,6 +3,12 @@ from datetime import date, timedelta
 import duckdb
 
 
+def init_db(db_path: str) -> None:
+    con = duckdb.connect(db_path)
+    _ensure_table(con)
+    con.close()
+
+
 def _ensure_table(con: duckdb.DuckDBPyConnection) -> None:
     con.execute("""
         CREATE TABLE IF NOT EXISTS metrics (

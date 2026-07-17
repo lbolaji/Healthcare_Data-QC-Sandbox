@@ -14,7 +14,7 @@ cd /opt/qc-sandbox
 python3.11 -m venv .venv
 source .venv/bin/activate
 pip install --upgrade pip
-pip install -e ".[dev]"
+pip install -e "."
 
 echo "=== Installing CloudWatch agent ==="
 wget -q https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm

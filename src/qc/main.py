@@ -8,7 +8,7 @@ from qc.ingest.reader import discover_clients_domains, load_domain
 from qc.checks import missing, types, ranges, dedup, timestamp, referential, logic
 import qc.checks  # ensure registry populated
 from qc.temporal.compare import compute_snapshot, compare
-from qc.metrics.store import append_snapshot, get_prior_snapshots
+from qc.metrics.store import init_db, append_snapshot, get_prior_snapshots
 from qc.report.writer import write_artifacts
 from qc.alert.notify import notify_threshold_breach
 
@@ -90,6 +90,7 @@ def main(run_date: str, config: dict, config_path: str = "config/config.yaml") -
 
     os.makedirs(output_path, exist_ok=True)
     os.makedirs(history_path, exist_ok=True)
+    init_db(db_path)
 
     pairs = discover_clients_domains(bucket, prefix, run_date)
     if not pairs:

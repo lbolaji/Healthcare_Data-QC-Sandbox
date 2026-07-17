@@ -18,7 +18,7 @@ def check(df: pd.DataFrame, cfg: dict, *, run_date: str, client: str, domain: st
             flags.append({
                 "run_date": run_date, "client": client, "domain": domain,
                 "row_id": None, "column": None, "rule": rule_name,
-                "severity": "error", "detail": f"condition eval error: {exc}",
+                "severity": "error", "detail": f"condition eval error: {type(exc).__name__}",
             })
             continue
         if max_rate is not None:
