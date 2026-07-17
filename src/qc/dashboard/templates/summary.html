@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block content %}
+<h2 style="margin-top:0">Run Summary</h2>
+{% if rows %}
+<table>
+  <thead>
+    <tr>
+      <th>Client</th><th>Domain</th><th>Run Date</th>
+      <th>Status</th><th>Rows Read</th><th>Flags Raised</th><th>Actions</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for row in rows | sort(attribute='run_date', reverse=True) %}
+    <tr>
+      <td>{{ row.client }}</td>
+      <td>{{ row.domain }}</td>
+      <td>{{ row.run_date }}</td>
+      <td class="status-{{ row.status }}">{{ row.status }}</td>
+      <td>{{ row.rows_read | default(0) }}</td>
+      <td>{{ row.flags_raised | default(0) }}</td>
+      <td>
+        <a href="/issues?client={{ row.client }}&domain={{ row.domain }}&run_date={{ row.run_date }}"
+           style="font-size:12px;color:#1a3a5c">View Issues →</a>
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p>No runs found. Run the pipeline first.</p>
+{% endif %}
+{% endblock %}
