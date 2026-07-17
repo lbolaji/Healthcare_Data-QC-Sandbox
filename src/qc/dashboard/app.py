@@ -1,5 +1,5 @@
 # src/qc/dashboard/app.py
-from flask import Flask, render_template, request
+from flask import Flask, render_template, request, url_for
 from qc.dashboard.loader import load_latest_summaries, load_issues, load_delta_report
 
 app = Flask(__name__)
@@ -25,6 +25,15 @@ def issues():
     if client and domain and run_date:
         delta = load_delta_report(client, domain, run_date)
 
+    # Build stable filter params dict for pagination URLs
+    filter_params = {k: v for k, v in {
+        "client": client, "domain": domain, "run_date": run_date,
+        "rule": rule, "severity": severity
+    }.items() if v}
+
+    prev_url = url_for("issues", **filter_params, page=page - 1) if page > 1 else None
+    next_url = url_for("issues", **filter_params, page=page + 1) if page * 100 < total else None
+
     return render_template(
         "issues.html",
         rows=df.to_dict("records") if not df.empty else [],
@@ -34,6 +43,8 @@ def issues():
         delta=delta,
         filters={"client": client, "domain": domain, "run_date": run_date,
                  "rule": rule, "severity": severity},
+        prev_url=prev_url,
+        next_url=next_url,
     )
 
 

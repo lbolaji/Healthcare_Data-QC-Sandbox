@@ -60,9 +60,9 @@
   </tbody>
 </table>
 <div class="pagination">
-  {% if page > 1 %}<a href="?{{ request.query_string.decode() | replace('page=' ~ page, 'page=' ~ (page-1)) }}">← Prev</a>{% endif %}
-  <span style="font-size:13px">Page {{ page }} of {{ ((total - 1) // 100 + 1) }}</span>
-  {% if page * 100 < total %}<a href="?{{ request.query_string.decode() | replace('page=' ~ page, 'page=' ~ (page+1)) }}">Next →</a>{% endif %}
+  {% if prev_url %}<a href="{{ prev_url }}">← Prev</a>{% endif %}
+  <span style="font-size:13px">Page {{ page }} of {{ ((total - 1) // 100 + 1) if total > 0 else 1 }}</span>
+  {% if next_url %}<a href="{{ next_url }}">Next →</a>{% endif %}
 </div>
 {% else %}
 <p>No issues found for the selected filters.</p>
