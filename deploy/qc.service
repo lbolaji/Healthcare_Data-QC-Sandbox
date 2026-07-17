@@ -1,0 +1,15 @@
+[Unit]
+Description=Healthcare Data QC Pipeline
+After=network.target
+
+[Service]
+Type=oneshot
+User=ec2-user
+WorkingDirectory=/opt/qc-sandbox
+EnvironmentFile=/opt/qc-sandbox/.env
+ExecStart=/opt/qc-sandbox/scripts/poll_and_run.sh
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

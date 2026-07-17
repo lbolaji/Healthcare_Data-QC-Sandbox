@@ -1,0 +1,17 @@
+[Unit]
+Description=Healthcare Data QC Dashboard
+After=network.target
+
+[Service]
+Type=simple
+User=ec2-user
+WorkingDirectory=/opt/qc-sandbox
+EnvironmentFile=/opt/qc-sandbox/.env
+ExecStart=/opt/qc-sandbox/scripts/run_dashboard.sh
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
