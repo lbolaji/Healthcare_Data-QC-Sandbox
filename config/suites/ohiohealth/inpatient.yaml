@@ -1,0 +1,28 @@
+client: ohiohealth
+domain: inpatient
+checks:
+  - missing:
+      columns: [patient_id, admit_ts, discharge_ts, drg_code]
+      max_null_rate: 0.0
+  - ranges:
+      age: {min: 0, max: 120}
+  - types:
+      patient_id: str
+      admit_ts: datetime
+      discharge_ts: datetime
+  - dedup:
+      key_columns: [patient_id, admit_ts]
+  - timestamp:
+      columns: [admit_ts, discharge_ts]
+      order: {before: admit_ts, after: discharge_ts}
+  - logic:
+      discharge_before_admit:
+        condition: "discharge_ts < admit_ts"
+        severity: error
+  - custom:
+      - rule: los_plausibility
+        max_los_days: 120
+        severity: warn
+  - delta:
+      row_count: {max_pct_change: 0.30}
+      null_rate: {max_abs_change: 0.05}

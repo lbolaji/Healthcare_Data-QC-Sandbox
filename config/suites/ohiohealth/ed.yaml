@@ -1,0 +1,30 @@
+client: ohiohealth
+domain: ed
+checks:
+  - missing:
+      columns: [patient_id, admit_ts, disposition]
+      max_null_rate: 0.0
+  - ranges:
+      age: {min: 0, max: 120}
+      los_hours: {min: 0, max: 720}
+  - types:
+      patient_id: str
+      admit_ts: datetime
+      age: numeric
+  - dedup:
+      key_columns: [patient_id, admit_ts]
+  - timestamp:
+      columns: [admit_ts, discharge_ts]
+      order: {before: admit_ts, after: discharge_ts}
+  - logic:
+      lwbs:
+        description: "Left Without Being Seen rate"
+        condition: "disposition == 'LWBS'"
+        max_rate: 0.05
+        severity: warn
+      discharge_before_admit:
+        condition: "discharge_ts < admit_ts"
+        severity: error
+  - delta:
+      row_count: {max_pct_change: 0.30}
+      null_rate: {max_abs_change: 0.05}
