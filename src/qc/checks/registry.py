@@ -41,3 +41,33 @@ def flags_from(
             "detail": detail,
         })
     return flags
+
+
+# Lazy imports to avoid circular imports at module load
+_CHECK_MODULES: dict = {}
+
+def _load_modules() -> dict:
+    if not _CHECK_MODULES:
+        from qc.checks import missing, types, ranges, dedup, timestamp, referential, logic
+        _CHECK_MODULES.update({
+            "missing": missing.check,
+            "types": types.check,
+            "ranges": ranges.check,
+            "dedup": dedup.check,
+            "timestamp": timestamp.check,
+            "referential": referential.check,
+            "logic": logic.check,
+        })
+    return _CHECK_MODULES
+
+
+def run_check(name: str, df, cfg: dict, *, run_date: str, client: str, domain: str) -> list[dict]:
+    modules = _load_modules()
+    fn = modules.get(name)
+    if fn is None:
+        # also check plugin registry
+        plugin = _REGISTRY.get(name)
+        if plugin:
+            return plugin["fn"](df, cfg, run_date=run_date, client=client, domain=domain)
+        raise ValueError(f"unknown check: {name!r}")
+    return fn(df, cfg, run_date=run_date, client=client, domain=domain)

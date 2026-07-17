@@ -1,6 +1,4 @@
 # tests/conftest.py
-import os
-import tempfile
 import pandas as pd
 import duckdb
 import pytest
@@ -27,9 +25,13 @@ def tmp_duckdb(tmp_path):
     con = duckdb.connect(db_path)
     con.execute("""
         CREATE TABLE metrics (
-            client VARCHAR, domain VARCHAR, run_date DATE,
-            row_count INTEGER, dup_rate DOUBLE,
-            metrics_json VARCHAR
+            client VARCHAR NOT NULL,
+            domain VARCHAR NOT NULL,
+            run_date DATE NOT NULL,
+            row_count INTEGER,
+            dup_rate DOUBLE,
+            metrics_json VARCHAR,
+            PRIMARY KEY (client, domain, run_date)
         )
     """)
     con.close()

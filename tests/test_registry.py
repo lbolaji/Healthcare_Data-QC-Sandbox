@@ -1,5 +1,6 @@
 import pandas as pd
-from qc.checks.registry import register, get_checks, flags_from
+import pytest
+from qc.checks.registry import register, get_checks, flags_from, run_check
 
 def test_register_and_get_all_domains():
     @register("test_rule_all")
@@ -27,3 +28,13 @@ def test_flags_from_returns_correct_schema():
     assert flags[0]["column"] == "age"
     assert flags[0]["client"] == "ohiohealth"
     assert "row_id" in flags[0]
+
+def test_run_check_dispatches_missing(run_ctx):
+    df = pd.DataFrame({"age": [30, 45]})  # missing required col patient_id
+    cfg = {"columns": ["patient_id"], "max_null_rate": 0.0}
+    flags = run_check("missing", df, cfg, **run_ctx)
+    assert any(f["rule"] == "missing_column" for f in flags)
+
+def test_run_check_raises_unknown():
+    with pytest.raises(ValueError, match="unknown check"):
+        run_check("nonexistent", pd.DataFrame(), {}, run_date="2026-07-17", client="x", domain="y")
