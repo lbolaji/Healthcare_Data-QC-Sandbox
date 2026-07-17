@@ -19,7 +19,7 @@
       <td>{{ row.rows_read | default(0) }}</td>
       <td>{{ row.flags_raised | default(0) }}</td>
       <td>
-        <a href="/issues?client={{ row.client }}&domain={{ row.domain }}&run_date={{ row.run_date }}"
+        <a href="{{ url_for('issues', client=row.client, domain=row.domain, run_date=row.run_date) }}"
            style="font-size:12px;color:#1a3a5c">View Issues →</a>
       </td>
     </tr>

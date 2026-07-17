@@ -1,8 +1,11 @@
 # src/qc/dashboard/loader.py
 import glob
 import json
+import logging
 import os
 import pandas as pd
+
+logger = logging.getLogger(__name__)
 
 
 def get_output_path() -> str:
@@ -17,8 +20,12 @@ def load_latest_summaries() -> list[dict]:
         parts = path.split(os.sep)
         client = parts[-3].split("=", 1)[1]
         date = parts[-2].split("=", 1)[1]
-        with open(path) as f:
-            summary = json.load(f)
+        try:
+            with open(path) as f:
+                summary = json.load(f)
+        except (OSError, json.JSONDecodeError):
+            logger.warning("skipping unreadable summary file: %s", path)
+            continue
         for domain, meta in summary.get("domains", {}).items():
             rows.append({
                 "client": client,
@@ -38,7 +45,12 @@ def load_issues(client: str | None, domain: str | None, run_date: str | None,
     domain_glob = f"domain={domain}" if domain else "domain=*"
     date_glob = f"date={run_date}" if run_date else "date=*"
     pattern = os.path.join(base, "qc_issues", client_glob, domain_glob, date_glob, "issues.parquet")
-    frames = [pd.read_parquet(p) for p in glob.glob(pattern)]
+    frames = []
+    for p in glob.glob(pattern):
+        try:
+            frames.append(pd.read_parquet(p))
+        except Exception:
+            logger.warning("skipping unreadable parquet file: %s", p)
     if not frames:
         return pd.DataFrame(), 0
     df = pd.concat(frames, ignore_index=True)

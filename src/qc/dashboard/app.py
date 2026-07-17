@@ -18,7 +18,10 @@ def issues():
     run_date = request.args.get("run_date") or None
     rule = request.args.get("rule") or None
     severity = request.args.get("severity") or None
-    page = int(request.args.get("page", 1))
+    try:
+        page = max(1, int(request.args.get("page", 1)))
+    except (ValueError, TypeError):
+        page = 1
 
     df, total = load_issues(client, domain, run_date, rule, severity, page)
     delta = {}

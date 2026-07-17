@@ -2,7 +2,7 @@
 {% block content %}
 <h2 style="margin-top:0">Issues Drilldown</h2>
 
-<form class="filters" method="get" action="/issues">
+<form class="filters" method="get" action="{{ url_for('issues') }}">
   <div><label>Client</label><input name="client" value="{{ filters.client or '' }}" placeholder="ohiohealth"></div>
   <div><label>Domain</label><input name="domain" value="{{ filters.domain or '' }}" placeholder="ed"></div>
   <div><label>Run Date</label><input name="run_date" value="{{ filters.run_date or '' }}" placeholder="2026-07-17"></div>
