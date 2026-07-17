@@ -79,14 +79,14 @@ def run_checks(df, suite: dict, *, run_date: str, client: str, domain: str) -> t
     return all_flags, {"checks_run": checks_run, "by_check": by_check}
 
 
-def main(run_date: str, config: dict) -> int:
+def main(run_date: str, config: dict, config_path: str = "config/config.yaml") -> int:
     bucket = config["source"]["bucket"]
     prefix = config["source"]["prefix"]
     output_path = config["output"]["path"]
     history_path = config["history"]["path"]
     db_path = os.path.join(history_path, "metrics.duckdb")
     thresholds = config.get("thresholds", {})
-    config_dir = os.path.dirname(os.path.abspath("config/config.yaml"))
+    config_dir = os.path.dirname(os.path.abspath(config_path))
 
     os.makedirs(output_path, exist_ok=True)
     os.makedirs(history_path, exist_ok=True)
@@ -97,51 +97,45 @@ def main(run_date: str, config: dict) -> int:
         return 0
 
     any_failed = False
+    any_succeeded = False
 
     for client, domain in pairs:
         logger.info("processing client=%s domain=%s", client, domain)
         try:
             df = load_domain(bucket, prefix, client, domain, run_date)
+            suite = load_suite(config_dir, client, domain)
+            issues, check_meta = run_checks(df, suite, run_date=run_date, client=client, domain=domain)
+            today_snapshot = compute_snapshot(df)
+            priors = get_prior_snapshots(db_path, client, domain, run_date)
+            delta_flags = compare(today_snapshot, priors, thresholds, run_date=run_date, client=client, domain=domain)
+            append_snapshot(db_path, client, domain, run_date, today_snapshot)
+            all_flags = issues + delta_flags
+            domain_summary = {
+                "status": "passed" if not any(f["severity"] == "error" for f in all_flags) else "failed",
+                "rows_read": len(df),
+                "flags_raised": len(all_flags),
+                **check_meta,
+            }
+            write_artifacts(output_path, client, domain, run_date, issues, delta_flags, domain_summary)
+            if all_flags:
+                notify_threshold_breach(client, domain, run_date, all_flags)
+            any_succeeded = True
+            logger.info("done client=%s domain=%s rows=%d flags=%d", client, domain, len(df), len(all_flags))
         except Exception as exc:
-            logger.error("failed to load client=%s domain=%s: %s", client, domain, exc)
+            logger.error("failed client=%s domain=%s error_type=%s", client, domain, type(exc).__name__)
             write_artifacts(output_path, client, domain, run_date, [], [], {
                 "status": "failed",
-                "error": str(exc),
+                "error": type(exc).__name__,
                 "rows_read": 0,
                 "checks_run": [],
                 "flags_raised": 0,
                 "by_check": {},
             })
             any_failed = True
-            continue
 
-        suite = load_suite(config_dir, client, domain)
-        issues, check_meta = run_checks(df, suite, run_date=run_date, client=client, domain=domain)
-
-        today_snapshot = compute_snapshot(df)
-        priors = get_prior_snapshots(db_path, client, domain, run_date)
-        delta_flags = compare(today_snapshot, priors, thresholds, run_date=run_date, client=client, domain=domain)
-        append_snapshot(db_path, client, domain, run_date, today_snapshot)
-
-        all_flags = issues + delta_flags
-        domain_summary = {
-            "status": "passed" if not any(f["severity"] == "error" for f in all_flags) else "failed",
-            "rows_read": len(df),
-            "flags_raised": len(all_flags),
-            **check_meta,
-        }
-
-        write_artifacts(output_path, client, domain, run_date, issues, delta_flags, domain_summary)
-
-        if all_flags:
-            notify_threshold_breach(client, domain, run_date, all_flags)
-
-        logger.info(
-            "done client=%s domain=%s rows=%d flags=%d",
-            client, domain, len(df), len(all_flags),
-        )
-
-    return 1 if any_failed else 0
+    if any_failed and not any_succeeded:
+        return 1
+    return 0
 
 
 if __name__ == "__main__":
@@ -150,4 +144,4 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--date", required=True, help="run date YYYY-MM-DD")
     args = parser.parse_args()
-    sys.exit(main(args.date, cfg))
+    sys.exit(main(args.date, cfg, config_path="config/config.yaml"))
