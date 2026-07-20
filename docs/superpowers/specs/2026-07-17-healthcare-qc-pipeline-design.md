@@ -80,7 +80,7 @@ qc-sandbox/
 
 ```
 S3 source (read-only)
-s3://<source-bucket>/landing/client=ohiohealth/date=2026-07-17/domain=ed/
+s3://<source-bucket>/landing/date=2026-07-17/client=ohiohealth/domain=ed/
     │
     │  poll_and_run.sh polls S3 every N minutes for today's prefix
     │  sentinel file /data/history/.last_run prevents duplicate runs
@@ -131,9 +131,9 @@ Clients and domains are discovered dynamically from S3 — no hardcoded list.
 
 ```
 s3://<source-bucket>/landing/
-    client=ohiohealth/date=2026-07-17/domain=ed/
-    client=ohiohealth/date=2026-07-17/domain=inpatient/
-    client=ssmhealth/date=2026-07-17/domain=ed/
+    date=2026-07-17/client=ohiohealth/domain=ed/
+    date=2026-07-17/client=ohiohealth/domain=inpatient/
+    date=2026-07-17/client=ssmhealth/domain=ed/
 ```
 
 `reader.py` lists the S3 prefix for today's date, extracts all `client=` and `domain=` partitions present, and iterates over them. If a client or domain has no data for a given day it is skipped gracefully.
@@ -200,12 +200,13 @@ Drop a function into `src/qc/checks/` and register it. Same contract as built-in
 
 ```python
 # src/qc/checks/custom_los.py
-from qc.checks.registry import register
+from qc.checks.registry import register, flags_from
 
 @register("los_plausibility", domains=["inpatient"])
-def check(df, cfg):
+def check(df, cfg, *, run_date, client, domain):
     bad = df[(df["discharge_ts"] - df["admit_ts"]).dt.days > cfg["max_los_days"]]
-    return flags_from(bad, rule="los_plausibility", severity="warn")
+    return flags_from(bad, rule="los_plausibility", severity="warn",
+                      run_date=run_date, client=client, domain=domain)
 ```
 
 ```yaml
@@ -354,44 +355,65 @@ tests/
 
 ## Section 9: Lightweight Dashboard (Flask)
 
-A minimal Flask app served from the same EC2 box, reading `/data/output` artifacts directly. No database needed — reads Parquet and JSON files on demand. If approved for BI later, the output format is already Parquet/JSON partitioned by client+domain+date — connecting Tableau/Power BI/Athena is a config change, not a rewrite.
+A minimal Flask app served from the same EC2 box, reading `/data/output` artifacts and the DuckDB history store directly. No separate database. If approved for BI later, the output format is already Parquet/JSON partitioned by client+domain+date — connecting Tableau/Power BI/Athena is a config change, not a rewrite.
 
 ### Structure
 
 ```
 src/qc/dashboard/
-├── app.py              # Flask app — routes only, no business logic
-├── loader.py           # reads /data/output Parquet + JSON into DataFrames
+├── app.py              # Flask app — routes + Jinja filters
+├── loader.py           # reads /data/output Parquet + JSON + DuckDB into DataFrames
 └── templates/
     ├── base.html
     ├── summary.html    # landing page
-    └── issues.html     # drilldown page
+    ├── issues.html     # unified issues drilldown
+    ├── trends.html     # D/W/M metric comparison table
+    └── config.html     # YAML suite editor with live validation
 ```
 
-Added to project structure under `src/qc/dashboard/` and a new `scripts/run_dashboard.sh` to start the Flask server (bound to localhost or private IP, not public).
+### Environment variables
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `QC_OUTPUT_PATH` | `/data/output` | Where the dashboard reads artifacts |
+| `QC_HISTORY_PATH` | `/data/history` | DuckDB location for the Trends page |
+| `QC_CONFIG_PATH` | `config/suites` | Suite YAML directory for the Config page |
 
 ### Pages
 
-**Summary landing page (`/`):**
-- Table: one row per client + domain, latest run date, status (pass/partial/fail), total flags raised, thresholds tripped
-- Color-coded status (green/amber/red)
-- Links through to the drilldown for each client+domain
+**Summary (`/`):**
+- One row per client + domain, latest run date, status (passed/partial_failure/failed), total flags raised
+- Color-coded status; links through to Issues for each row
 
 **Issues drilldown (`/issues`):**
-- Filter controls: client, domain, rule, severity, date range
-- Paginated table of `issues.parquet` rows: run_date, client, domain, row_id, column, rule, severity, detail
-- Delta report panel: D/W/M comparison metrics for the selected client+domain+date, flagged variations highlighted
+- Filter controls: client, domain, run date, rule, severity
+- Single unified paginated table — check issues and temporal (delta) flags merged into one view
+- Rule column distinguishes check flags (`range`, `logic`, `missing`, …) from temporal flags (`delta_row_count`, `delta_null_rate`)
+
+**Trends (`/trends`):**
+- Select client + domain + run date to load a D/W/M comparison table
+- Columns: metric, Today, D-1, D-1 Δ, D-7, D-7 Δ, D-30, D-30 Δ
+- Delta values color-coded: red (large increase), orange (moderate), green (stable or decrease)
+- Reads snapshots directly from DuckDB (`QC_HISTORY_PATH/metrics.duckdb`)
+
+**Check Config (`/config`):**
+- Lists all existing suite YAMLs per client + domain in a sidebar
+- Loads any suite into a dark-themed editor; supports creating new suites
+- Live YAML validation on every keystroke (400ms debounce) — green ✅ when valid, red ❌ with exact error line/column when not; Save button disabled until valid
+- Saves to `config/suites/<client>/<domain>.yaml`; changes take effect on next pipeline run
+- Quick reference panel shows example logic rules (LWBS, DTR, DTP)
 
 ### Access
 
-- Served on a private port (e.g. 8080) bound to the EC2 private IP
+- Served on port 8080 bound to `0.0.0.0` (restrict via security group to private subnet)
 - Access via SSH tunnel or VPN — no public ingress
 - No auth for sandbox; add auth before any broader rollout
 
 ### Deployment
 
-- `scripts/run_dashboard.sh` starts Flask (or gunicorn) as a systemd service
+- `scripts/run_dashboard.sh` starts gunicorn as a systemd service
 - `deploy/dashboard.service` — systemd unit alongside `qc.service`
+- Start command: `QC_OUTPUT_PATH=/data/output QC_HISTORY_PATH=/data/history gunicorn "qc.dashboard.app:app" --bind 0.0.0.0:8080`
 
 ---
 
@@ -403,7 +425,7 @@ Added to project structure under `src/qc/dashboard/` and a new `scripts/run_dash
 | OS | Amazon Linux 2023 or Ubuntu LTS |
 | Storage | gp3 EBS — app + history store (KMS-encrypted) |
 | Runtime | Python 3.11 venv; deps via pyproject.toml (includes Flask/gunicorn) |
-| Schedule | systemd timer drives poll_and_run.sh every N minutes |
+| Schedule | systemd timer drives poll_and_run.sh every 15 minutes |
 | Trigger | poll_and_run.sh detects new S3 prefix → fires main.py |
 | IAM role | Least privilege: read source S3, put CloudWatch logs/metrics, SNS publish (S3 output write deferred — sandbox writes to EBS only) |
 | Network | Private subnet; VPC endpoints for S3/CloudWatch/KMS (no public ingress) |
@@ -413,7 +435,7 @@ Added to project structure under `src/qc/dashboard/` and a new `scripts/run_dash
 1. `bootstrap_ec2.sh` — installs Python/deps + CloudWatch agent
 2. Clone repo
 3. `deploy/qc.timer` enabled via systemd
-4. Timer fires `scripts/poll_and_run.sh` every N minutes
+4. Timer fires `scripts/poll_and_run.sh` every 15 minutes
 5. `poll_and_run.sh` checks S3 for today's data → runs `src.qc.main`
 
 ---

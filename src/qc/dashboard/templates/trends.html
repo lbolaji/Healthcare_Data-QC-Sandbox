@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block content %}
+<h2 style="margin-top:0">Trends — D/W/M Comparison</h2>
+
+<form class="filters" method="get" action="{{ url_for('trends') }}">
+  <div>
+    <label>Client</label>
+    <input name="client" value="{{ filters.client or '' }}" placeholder="ohiohealth" list="client-list">
+    <datalist id="client-list">
+      {% for s in summaries | unique(attribute='client') %}
+        <option value="{{ s.client }}">
+      {% endfor %}
+    </datalist>
+  </div>
+  <div>
+    <label>Domain</label>
+    <input name="domain" value="{{ filters.domain or '' }}" placeholder="ed" list="domain-list">
+    <datalist id="domain-list">
+      {% for s in summaries | unique(attribute='domain') %}
+        <option value="{{ s.domain }}">
+      {% endfor %}
+    </datalist>
+  </div>
+  <div>
+    <label>Run Date</label>
+    <input name="run_date" value="{{ filters.run_date or '' }}" placeholder="2026-07-20" list="date-list">
+    <datalist id="date-list">
+      {% for s in summaries | unique(attribute='run_date') %}
+        <option value="{{ s.run_date }}">
+      {% endfor %}
+    </datalist>
+  </div>
+  <button type="submit">Load</button>
+</form>
+
+{% if filters.client and filters.domain and filters.run_date %}
+  {% if rows %}
+  <p style="font-size:13px;color:#666;margin-bottom:8px">
+    Showing {{ rows | length }} metrics for
+    <strong>{{ filters.client }} / {{ filters.domain }}</strong>
+    on <strong>{{ filters.run_date }}</strong>.
+    Δ columns show change from prior period (red = increase, green = decrease).
+  </p>
+  <table>
+    <thead>
+      <tr>
+        <th>Metric</th>
+        <th>Today</th>
+        <th>D-1</th><th>D-1 Δ</th>
+        <th>D-7</th><th>D-7 Δ</th>
+        <th>D-30</th><th>D-30 Δ</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for row in rows %}
+      <tr>
+        <td style="font-weight:bold;color:#1a3a5c">{{ row.metric }}</td>
+        <td>{{ row.today | format_metric(row.is_rate) }}</td>
+
+        <td>{{ row.day | format_metric(row.is_rate) if row.day is not none else '—' }}</td>
+        <td>{{ row.day_delta | format_delta(row.is_rate) if row.day_delta is not none else '—' }}</td>
+
+        <td>{{ row.week | format_metric(row.is_rate) if row.week is not none else '—' }}</td>
+        <td>{{ row.week_delta | format_delta(row.is_rate) if row.week_delta is not none else '—' }}</td>
+
+        <td>{{ row.month | format_metric(row.is_rate) if row.month is not none else '—' }}</td>
+        <td>{{ row.month_delta | format_delta(row.is_rate) if row.month_delta is not none else '—' }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p>No trend data found for <strong>{{ filters.client }} / {{ filters.domain }}</strong> on {{ filters.run_date }}.
+     The pipeline must have run at least once to populate DuckDB.</p>
+  {% endif %}
+{% else %}
+<p style="color:#666">Select a client, domain, and run date above to view D/W/M metric trends.</p>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,168 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+  .config-layout { display: flex; gap: 20px; align-items: flex-start; }
+  .suite-list { min-width: 200px; background: white; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,.1); overflow: hidden; }
+  .suite-list h3 { margin: 0; padding: 10px 14px; background: #1a3a5c; color: white; font-size: 13px; }
+  .suite-list a { display: block; padding: 8px 14px; font-size: 13px; text-decoration: none; color: #222; border-bottom: 1px solid #eee; }
+  .suite-list a:last-child { border-bottom: none; }
+  .suite-list a:hover { background: #f0f6ff; }
+  .suite-list a.active { background: #e8f0fe; color: #1a3a5c; font-weight: bold; }
+  .suite-list .new-link { color: #1a7a40; font-weight: bold; }
+  .editor-panel { flex: 1; }
+  .editor-panel textarea {
+    width: 100%; box-sizing: border-box;
+    font-family: 'SF Mono', 'Fira Code', monospace; font-size: 13px;
+    border: 1px solid #ccc; border-radius: 4px; padding: 12px;
+    background: #1e1e2e; color: #cdd6f4;
+    line-height: 1.6; resize: vertical;
+  }
+  .editor-panel textarea:focus { outline: 2px solid #1a3a5c; }
+  .editor-actions { margin-top: 10px; display: flex; gap: 10px; align-items: center; }
+  .editor-actions .new-fields { display: flex; gap: 8px; }
+  .editor-actions input { padding: 6px 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px; width: 140px; }
+  .alert { padding: 10px 14px; border-radius: 4px; margin-bottom: 14px; font-size: 13px; }
+  .alert-success { background: #e6f4ea; color: #1a7a40; }
+  .alert-error   { background: #fde8e8; color: #c0392b; }
+  .hint { font-size: 12px; color: #888; margin-top: 6px; }
+  .yaml-status { display: flex; align-items: center; gap: 8px; padding: 7px 12px;
+    border-radius: 4px; font-size: 12px; font-weight: bold; margin-bottom: 6px;
+    transition: background 0.2s; }
+  .yaml-status.valid   { background: #e6f4ea; color: #1a7a40; border: 1px solid #a8d5b0; }
+  .yaml-status.invalid { background: #fde8e8; color: #c0392b; border: 1px solid #f0a0a0; }
+  .yaml-status.checking { background: #f5f5f5; color: #888; border: 1px solid #ddd; }
+  .yaml-status .icon { font-size: 15px; }
+  .yaml-status .msg { flex: 1; white-space: pre-wrap; word-break: break-word; }
+</style>
+
+<h2 style="margin-top:0">Check Config</h2>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% for category, message in messages %}
+    <div class="alert alert-{{ category }}">{{ message }}</div>
+  {% endfor %}
+{% endwith %}
+
+<div class="config-layout">
+
+  <div class="suite-list">
+    <h3>Suites</h3>
+    {% for s in suites %}
+      <a href="{{ url_for('config_view', client=s.client, domain=s.domain) }}"
+         class="{{ 'active' if filters.client == s.client and filters.domain == s.domain else '' }}">
+        {{ s.client }} / {{ s.domain }}
+      </a>
+    {% endfor %}
+    <a href="{{ url_for('config_view') }}" class="new-link">+ New suite</a>
+  </div>
+
+  <div class="editor-panel">
+    <form method="post" action="{{ url_for('config_save') }}">
+
+      {% if filters.client and filters.domain %}
+        <input type="hidden" name="client" value="{{ filters.client }}">
+        <input type="hidden" name="domain" value="{{ filters.domain }}">
+        <p style="margin:0 0 8px;font-size:13px;color:#666">
+          Editing <strong>{{ filters.client }} / {{ filters.domain }}</strong>
+        </p>
+      {% else %}
+        <div class="editor-actions" style="margin-bottom:10px">
+          <div class="new-fields">
+            <input type="text" name="client" placeholder="client (e.g. ohiohealth)" required>
+            <input type="text" name="domain" placeholder="domain (e.g. ed)" required>
+          </div>
+        </div>
+      {% endif %}
+
+      <div id="yaml-status" class="yaml-status checking">
+        <span class="icon">⏳</span>
+        <span class="msg">Validating…</span>
+      </div>
+
+      <textarea id="yaml-editor" name="yaml_text" rows="32" spellcheck="false">{{ yaml_text if yaml_text is not none else default_yaml }}</textarea>
+
+      <div class="editor-actions">
+        <button id="save-btn" type="submit" style="padding:7px 20px;background:#1a3a5c;color:white;border:none;border-radius:4px;cursor:pointer;font-size:13px">
+          Save
+        </button>
+        <span class="hint">YAML is validated before saving. Changes take effect on the next pipeline run.</span>
+      </div>
+    </form>
+
+    {% if not filters.client %}
+    <div style="margin-top:20px;background:white;border-radius:6px;padding:16px;box-shadow:0 1px 3px rgba(0,0,0,.1)">
+      <h3 style="margin:0 0 10px;font-size:13px;color:#1a3a5c">Quick reference — logic rules</h3>
+      <pre style="font-size:12px;background:#f5f5f5;padding:12px;border-radius:4px;overflow-x:auto">checks:
+  - logic:
+      lwbs:
+        description: "Left Without Being Seen"
+        condition: "disposition == 'LWBS'"
+        max_rate: 0.05
+        severity: warn
+      dtr_exceeded:
+        description: "Door-to-Room > 60 min"
+        condition: "door_to_room_minutes > 60"
+        severity: warn
+      dtp_exceeded:
+        description: "Door-to-Provider > 45 min"
+        condition: "door_to_provider_minutes > 45"
+        severity: error
+      discharge_before_admit:
+        condition: "discharge_ts &lt; admit_ts"
+        severity: error</pre>
+    </div>
+    {% endif %}
+  </div>
+
+</div>
+<script>
+(function () {
+  const textarea = document.getElementById('yaml-editor');
+  const status   = document.getElementById('yaml-status');
+  const saveBtn  = document.getElementById('save-btn');
+  if (!textarea) return;
+
+  let timer = null;
+  let currentValid = null;
+
+  function setStatus(state, message) {
+    currentValid = (state === 'valid');
+    status.className = 'yaml-status ' + state;
+    const icons = { valid: '✅', invalid: '❌', checking: '⏳' };
+    status.innerHTML = '<span class="icon">' + icons[state] + '</span><span class="msg">' + message + '</span>';
+    if (saveBtn) {
+      saveBtn.disabled = !currentValid;
+      saveBtn.style.opacity = currentValid ? '1' : '0.4';
+      saveBtn.style.cursor  = currentValid ? 'pointer' : 'not-allowed';
+    }
+  }
+
+  function validate() {
+    setStatus('checking', 'Validating…');
+    fetch('{{ url_for("config_validate") }}', {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: textarea.value,
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (data.valid) {
+        setStatus('valid', 'Valid YAML — ready to save');
+      } else {
+        setStatus('invalid', data.error || 'Invalid YAML');
+      }
+    })
+    .catch(() => setStatus('invalid', 'Could not reach validation endpoint'));
+  }
+
+  textarea.addEventListener('input', function () {
+    clearTimeout(timer);
+    setStatus('checking', 'Validating…');
+    timer = setTimeout(validate, 400);
+  });
+
+  // Run on page load
+  validate();
+})();
+</script>
+{% endblock %}

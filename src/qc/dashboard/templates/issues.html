@@ -5,8 +5,8 @@
 <form class="filters" method="get" action="{{ url_for('issues') }}">
   <div><label>Client</label><input name="client" value="{{ filters.client or '' }}" placeholder="ohiohealth"></div>
   <div><label>Domain</label><input name="domain" value="{{ filters.domain or '' }}" placeholder="ed"></div>
-  <div><label>Run Date</label><input name="run_date" value="{{ filters.run_date or '' }}" placeholder="2026-07-17"></div>
-  <div><label>Rule</label><input name="rule" value="{{ filters.rule or '' }}" placeholder="range"></div>
+  <div><label>Run Date</label><input name="run_date" value="{{ filters.run_date or '' }}" placeholder="2026-07-20"></div>
+  <div><label>Rule</label><input name="rule" value="{{ filters.rule or '' }}" placeholder="range, logic, delta_row_count…"></div>
   <div><label>Severity</label>
     <select name="severity">
       <option value="">All</option>
@@ -17,26 +17,14 @@
   <button type="submit">Filter</button>
 </form>
 
-{% if delta and delta.flags %}
-<div class="delta-panel">
-  <h3>Delta Report — {{ filters.client }} / {{ filters.domain }} / {{ filters.run_date }}</h3>
-  <table>
-    <thead><tr><th>Column</th><th>Rule</th><th>Detail</th><th>Severity</th></tr></thead>
-    <tbody>
-    {% for f in delta.flags %}
-      <tr>
-        <td>{{ f.column or '—' }}</td>
-        <td>{{ f.rule }}</td>
-        <td class="{% if f.severity == 'error' %}flagged{% endif %}">{{ f.detail }}</td>
-        <td><span class="badge badge-{{ f.severity }}">{{ f.severity }}</span></td>
-      </tr>
-    {% endfor %}
-    </tbody>
-  </table>
-</div>
-{% endif %}
-
-<p style="font-size:13px;color:#666">{{ total }} total issues {% if rows %}(showing page {{ page }}){% endif %}</p>
+<p style="font-size:13px;color:#666">
+  {{ total }} total issue{{ 's' if total != 1 else '' }}
+  {%- if filters.rule or filters.severity %} (filtered by
+    {%- if filters.rule %} rule=<code>{{ filters.rule }}</code>{% endif %}
+    {%- if filters.severity %} severity=<code>{{ filters.severity }}</code>{% endif %})
+  {%- endif %}
+  {% if rows %} — page {{ page }}{% endif %}
+</p>
 
 {% if rows %}
 <table>
@@ -61,10 +49,10 @@
 </table>
 <div class="pagination">
   {% if prev_url %}<a href="{{ prev_url }}">← Prev</a>{% endif %}
-  <span style="font-size:13px">Page {{ page }} of {{ ((total - 1) // 100 + 1) if total > 0 else 1 }}</span>
+  <span style="font-size:13px">Page {{ page }} of {{ ((total - 1) // page_size + 1) if total > 0 else 1 }}</span>
   {% if next_url %}<a href="{{ next_url }}">Next →</a>{% endif %}
 </div>
 {% else %}
-<p>No issues found for the selected filters.</p>
+<p style="color:#666">No issues found.</p>
 {% endif %}
 {% endblock %}
