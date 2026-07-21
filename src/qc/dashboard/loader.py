@@ -173,6 +173,7 @@ def load_suite_config(client: str, domain: str) -> str | None:
 def save_suite_config(client: str, domain: str, yaml_text: str) -> str | None:
     """Validate and save YAML text. Returns error message string or None on success."""
     import yaml as _yaml
+    yaml_text = yaml_text.replace("\r\n", "\n").replace("\r", "\n")
     try:
         _yaml.safe_load(yaml_text)
     except _yaml.YAMLError as exc:
