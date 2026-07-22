@@ -73,3 +73,43 @@ See `config/suites/ohiohealth/inpatient.yaml` for usage.
 ## EC2 deploy
 
     bash scripts/bootstrap_ec2.sh
+
+## Power BI via Athena (optional)
+
+The pipeline can publish `issues.parquet` to S3 after each run so Power BI
+can query it via Athena. Disabled by default — EBS-only until you enable it.
+
+**1. Enable publishing in `config/config.yaml`:**
+
+    publish:
+      enabled: true
+      bucket: "your-analytics-bucket"
+      prefix: "qc-output"
+      athena_database: "healthcare_qc"
+      athena_results_bucket: "your-athena-results-bucket"
+      athena_workgroup: "primary"
+
+**2. Run the one-time Athena DDL:**
+
+Open `scripts/setup_athena.sql` in the Athena Query Editor, replace the
+bucket/prefix placeholders, and run it. Enable partition projection
+(instructions in the file) to avoid running `MSCK REPAIR TABLE` after each
+new date.
+
+**3. Add the publisher permissions to the EC2 IAM role:**
+
+Attach `deploy/iam_publisher_policy.json` to the EC2 instance role.
+Replace `<your-analytics-bucket>` and `<your-athena-results-bucket>`
+placeholders with your actual bucket names.
+
+**4. Connect Power BI Desktop:**
+
+- Get Data → Amazon Athena (requires Athena ODBC driver v2)
+- Server: `athena.<region>.amazonaws.com`
+- Port: `443`
+- Database: `healthcare_qc`
+- Workgroup: `primary` (or your workgroup from config)
+- Table: `qc_issues`
+
+For scheduled refresh via Power BI Service, use an On-premises data gateway
+or switch to Power BI Dataflow with S3 connector instead of ODBC.

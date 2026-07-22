@@ -14,3 +14,13 @@ thresholds:
   row_count_max_pct_change: 0.30
   null_rate_max_abs_change: 0.05
   mean_max_pct_change: 0.20
+
+# Optional: publish EBS artifacts to S3 for Athena/Power BI access.
+# Set enabled: true and fill in bucket names before use.
+publish:
+  enabled: false
+  bucket: "your-analytics-bucket"
+  prefix: "qc-output"
+  athena_database: "healthcare_qc"
+  athena_results_bucket: "your-athena-results-bucket"
+  athena_workgroup: "primary"

@@ -10,6 +10,7 @@ import qc.checks  # ensure registry populated
 from qc.temporal.compare import compute_snapshot, compare
 from qc.metrics.store import init_db, append_snapshot, get_prior_snapshots
 from qc.report.writer import write_artifacts
+from qc.report.publisher import publish_artifacts
 from qc.alert.notify import notify_threshold_breach
 
 logging.basicConfig(
@@ -84,6 +85,7 @@ def main(run_date: str, config: dict, config_path: str = "config/config.yaml") -
     prefix = config["source"]["prefix"]
     output_path = config["output"]["path"]
     history_path = config["history"]["path"]
+    publish_cfg = config.get("publish", {})
     db_path = os.path.join(history_path, "metrics.duckdb")
     thresholds = config.get("thresholds", {})
     config_dir = os.path.dirname(os.path.abspath(config_path))
@@ -118,6 +120,7 @@ def main(run_date: str, config: dict, config_path: str = "config/config.yaml") -
                 **check_meta,
             }
             write_artifacts(output_path, client, domain, run_date, issues, delta_flags, domain_summary)
+            publish_artifacts(output_path, client, domain, run_date, publish_cfg)
             if all_flags:
                 notify_threshold_breach(client, domain, run_date, all_flags)
             any_succeeded = True

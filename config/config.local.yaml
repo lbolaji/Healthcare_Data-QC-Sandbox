@@ -1,0 +1,19 @@
+source:
+  bucket: "demo-local"
+  prefix: "landing"
+
+output:
+  path: "data/output"
+
+history:
+  path: "data/history"
+
+poll_interval_minutes: 15
+
+thresholds:
+  row_count_max_pct_change: 0.30
+  null_rate_max_abs_change: 0.05
+  mean_max_pct_change: 0.20
+
+publish:
+  enabled: false
